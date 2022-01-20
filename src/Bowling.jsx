@@ -28,6 +28,10 @@ export default class Bowling extends React.Component {
             remainingPins = 11 - currentScore[(i-1)] ? 11 - currentScore[(i-1)] : 11;
         }
         pins = this.hitPins(remainingPins);
+            for (var x = 0; x < 16; x++) {
+                pins = 10;
+            }
+
         if ((!i || !secondShot || i > 17) && pins === 10) {
             this.handleStrike(i, currentScore);
             return;
@@ -87,7 +91,7 @@ export default class Bowling extends React.Component {
                 strikes--;
             } 
             strikes++;
-        } else if (pointsThisRoll === '/') {
+        } else if (pointsThisRoll === '/') { // if spare
             currentFrameScore[currentFrame] += (10 - pointsPrevRoll);
             currentTotalScore = currentFrameScore[currentFrame];
             if (strikes) { // spare after double
@@ -104,6 +108,8 @@ export default class Bowling extends React.Component {
                 currentFrameScore[currentFrame] = currentTotalScore;
                 strikes--;
             } else if (strikes > 1) { // doubles
+                if (pointsThisRoll === 'X') pointsThisRoll = 10;
+                if (pointsPrevRoll === 'X') pointsPrevRoll = 10;
                 currentFrameScore[currentFrame-2] = currentTotalScore + 20 + pointsThisRoll;
                 currentTotalScore = currentFrameScore[currentFrame-2];
                 currentFrameScore[currentFrame-1] = null;
@@ -136,14 +142,11 @@ export default class Bowling extends React.Component {
 
     }
 
-    // on 18 end game if not spare or strike
-    // on 19 handle spares differently
-
-    handleStrike(i, currentScore) {  // 18, 19, 20 handle strikes and spares differently
+    handleStrike(i, currentScore) {
         currentScore[i] = 'X';
         if(i === 18 || i === 19) i++
         else if(i === 20) this.endGame();
-        else i += 2
+        else i += 2 // moving 2 indexes up to next frame
         this.setState({
             score: currentScore,
             throwIndex: i,
@@ -242,6 +245,11 @@ export default class Bowling extends React.Component {
                     </table> 
                     <br/>
                     <h2>{this.state.action}</h2>
+                    <br/>
+                    <div className='container'>
+                        <h4>Nice to haves</h4>
+                        <p>Multiple players, Name input, Editable scores, Score input</p>
+                    </div>
                 </div>
             </div>
         )
