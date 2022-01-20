@@ -2,8 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import './bowling.css';
 
-// Note: Was not able to complete doubles/turkeys or the 10th frame
-
 export default class Bowling extends React.Component {
     constructor(props) {
         super(props);
@@ -14,6 +12,7 @@ export default class Bowling extends React.Component {
             throwIndex: 0,
             endGame: false,
             action: 'Good luck!',
+            strikeCounter: 0,
         }
     }
 
@@ -42,8 +41,11 @@ export default class Bowling extends React.Component {
                 currentScore[i] = pins;
                 currentAction = pins ? 'Hit ' + pins + ' pins' : 'Gutter!';
                 if (i < 19) i++;
-                else if (i === 19 && currentScore[(i-1)] === 'X') i ++;
-                else this.endGame();
+                else if (i > 18 && i < 20 && (currentScore[(i-1)] === 'X' || currentScore[(i-1)] === '/')) i++;
+                else { 
+                    this.endGame(); 
+                    i++; 
+                } 
             }
         }
 
@@ -51,58 +53,87 @@ export default class Bowling extends React.Component {
             score: currentScore,
             throwIndex: i,
             action: currentAction,
-        }, () => this.evaluateScores());
+        }, () => this.evaluateScores(currentScore));
     }
 
     hitPins(remainingPins) {
         return Math.floor(Math.random() * (remainingPins));
     }
 
-    evaluateScores() {
+    evaluateScores(score) {
         const i = this.state.throwIndex - 1;
-        const currentScore = this.state.score;
-        const currentFrame = Math.floor(i/2);
+        let currentFrame = Math.floor(i/2);
+        if (currentFrame === 10) currentFrame--;
+        const lastFrame = currentFrame === 9;
         let currentTotalScore = this.state.totalScore;
         let currentFrameScore = this.state.frameScore.map(Number);
+        let strikes = this.state.strikeCounter;
 
-        let pointsThisRoll = currentScore[i];
-        console.log(pointsThisRoll);
-        let pointsPrevRoll = currentScore[i-1];
-        const strikeBonus = currentScore[i-3] === 'X';
-        const spareBonus = pointsPrevRoll === '/';
+        let pointsThisRoll = score[i];
+        let pointsPrevRoll = score[i-1];
+        const strikeBonus = score[i-3] === 'X';
+        const spareBonus = pointsPrevRoll === '/' && ((i === 18) || !lastFrame); // not first throw of 10th frame
 
-        if (pointsPrevRoll === 'X') { // strike on first roll, using previous roll because strike adds index
-            currentTotalScore += 10;
-            currentFrameScore[currentFrame] += currentTotalScore;
+        if (pointsPrevRoll === 'X' && !lastFrame) { // using previous roll because strike adds index
+            currentFrameScore[currentFrame] = null;
+            if (strikes) {
+                currentFrameScore[currentFrame-1] = null;
+            } 
+            if (strikes > 1) { // turkey
+                currentFrameScore[currentFrame-2] = currentTotalScore + 30;
+                currentTotalScore = currentFrameScore[currentFrame-2];
+                currentFrameScore[currentFrame-1] = null;
+                currentFrameScore[currentFrame] = null;
+                strikes--;
+            } 
+            strikes++;
         } else if (pointsThisRoll === '/') {
-            currentTotalScore += (10 - pointsPrevRoll);
             currentFrameScore[currentFrame] += (10 - pointsPrevRoll);
+            currentTotalScore = currentFrameScore[currentFrame];
+            if (strikes) { // spare after double
+                currentFrameScore[currentFrame-1] = currentFrameScore[currentFrame-2] + 20
+                currentFrameScore[currentFrame] = null;
+            }
         } else {
-            if (!i) {
-                currentTotalScore += pointsThisRoll;
-                currentFrameScore[currentFrame] = pointsThisRoll;
-            } else {
-                if (strikeBonus) {
-                    const frameScore = pointsThisRoll + pointsPrevRoll;
-                    currentFrameScore[currentFrame-1] += frameScore;
-                    currentTotalScore += pointsThisRoll;
-                    currentFrameScore[currentFrame] = currentTotalScore + frameScore;
-                    currentTotalScore = currentFrameScore[currentFrame];
-                } else if (spareBonus) {
-                    currentFrameScore[currentFrame-1] += pointsThisRoll;
-                    currentTotalScore += pointsThisRoll;
-                    currentFrameScore[currentFrame] = currentTotalScore + pointsThisRoll;
-                    currentTotalScore = currentFrameScore[currentFrame];
-                } else {
-                    currentTotalScore += pointsThisRoll;
-                    currentFrameScore[currentFrame] = currentTotalScore;
+            if (strikes && strikeBonus) { 
+                if (pointsThisRoll === 'X') pointsThisRoll = 10;
+                if (pointsPrevRoll === 'X') pointsPrevRoll = 10;
+                let frameScore = pointsThisRoll + pointsPrevRoll;
+                currentFrameScore[currentFrame-1] += (currentTotalScore + frameScore + 10);
+                currentTotalScore = currentFrameScore[currentFrame-1] + frameScore;
+                currentFrameScore[currentFrame] = currentTotalScore;
+                strikes--;
+            } else if (strikes > 1) { // doubles
+                currentFrameScore[currentFrame-2] = currentTotalScore + 20 + pointsThisRoll;
+                currentTotalScore = currentFrameScore[currentFrame-2];
+                currentFrameScore[currentFrame-1] = null;
+                currentFrameScore[currentFrame] = null;
+                strikes--;
+            } else if (spareBonus) { 
+                if (strikes)  {
+                    currentFrameScore[currentFrame-1] += currentFrameScore[currentFrame-2] + 10 + pointsThisRoll;
+                    strikes--;
                 }
+                else currentFrameScore[currentFrame-1] += pointsThisRoll; // or strike?
+                currentTotalScore = currentFrameScore[currentFrame-1];
+                currentFrameScore[currentFrame] = currentTotalScore + pointsThisRoll;
+                if (i === 20) currentFrameScore[currentFrame] = currentTotalScore; // last throw
+                currentTotalScore = currentFrameScore[currentFrame];
+            } else if (!strikes) {
+                if (pointsThisRoll === 'X') pointsThisRoll = 10; // 10th frame
+                if (pointsThisRoll === '/') pointsThisRoll = (10 - pointsPrevRoll); // 10th frame
+                currentTotalScore += pointsThisRoll;
+                currentFrameScore[currentFrame] = currentTotalScore;
             }
         }
+
         this.setState({
             frameScore: currentFrameScore,
             totalScore: currentTotalScore,
-        })
+            strikeCounter: strikes,
+        });
+
+
     }
 
     // on 18 end game if not spare or strike
@@ -117,7 +148,7 @@ export default class Bowling extends React.Component {
             score: currentScore,
             throwIndex: i,
             action: 'Strike!',
-        }, () => this.evaluateScores());
+        }, () => this.evaluateScores(currentScore));
     }
 
     endGame() {
@@ -134,6 +165,7 @@ export default class Bowling extends React.Component {
             throwIndex: 0,
             endGame: false,
             action: 'Good luck!',
+            strikeCounter: 0,
         }
         this.setState(newGame);
     }
@@ -186,31 +218,49 @@ export default class Bowling extends React.Component {
                             <tr> 
                                 <th scope="row" className="align-middle" rowSpan="2">You</th>
                                 {this.state.score.map((pins, i) => {
-                                    return (<td
-                                                id={i}
-                                                className={this.state.throwIndex === i ? 'throwIndex' : undefined}
-                                                key={i}>
-                                                    {pins}
-                                                </td>)
+                                    while (i < 21) {
+                                        return (<td
+                                            id={i}
+                                            className={this.state.throwIndex === i ? 'currentThrow' : undefined}
+                                            key={i}>
+                                                {pins}
+                                            </td>)
+                                    }
                                 })}
                                 <td id="total-score" className="align-middle" rowSpan="3">{this.state.totalScore}</td>
                             </tr>
                             <tr>
                                 {this.state.frameScore.map((score, i) => {
-                                    return (
-                                        <td id={i} key={i} rowSpan={2} colSpan={i < 9 ? 2 : 3}>{score}</td>
-                                    )
+                                    while (i < 10) {
+                                        return (
+                                            <td id={i} key={i} rowSpan={2} colSpan={i < 9 ? 2 : 3}>{score}</td>
+                                        )
+                                    }
                                 })}
                             </tr>
                         </tbody>
                     </table> 
                     <br/>
                     <h2>{this.state.action}</h2>
-                    <br/>
-                    <p>Note: Was not able to complete doubles/turkeys or the 10th frame</p>
                 </div>
             </div>
         )
     }
 }
 
+
+// Add in Bowling.jsx below ln 30 where pins are set for testing
+// if (i === 0) pins = 10;
+// if (i === 1) pins = 1;
+// if (i === 2) pins = 10;
+// if (i === 3) pins = 1;
+// if (i === 4) pins = 1;
+// if (i === 5) pins = 5;
+// if (i === 6) pins = 5;
+// if (i === 7) pins = 1;
+// if (i === 8) pins = 1;
+// if (i === 9) pins = 1;
+// if (i === 10) pins = 1;
+// for (var x = 0; x < 16; x++) {
+//     pins = 1;
+// }
